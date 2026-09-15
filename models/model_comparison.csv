@@ -1,0 +1,4 @@
+Model,Accuracy,Weighted_F1,Macro_F1,CV_Mean_F1
+Logistic Regression,1.0,1.0,1.0,1.0
+Multinomial Naive Bayes,1.0,1.0,1.0,1.0
+Complement Naive Bayes,1.0,1.0,1.0,1.0
