@@ -1,15 +1,15 @@
-import streamlit as st
-import pandas as pd
-import joblib
 import os
-
 from datetime import date
+from pathlib import Path
+
+import joblib
+import pandas as pd
 import plotly.express as px
+import streamlit as st
 
-
-# --------------------------------------------------
-# Page Configuration
-# --------------------------------------------------
+# ==================================================
+# PAGE CONFIGURATION
+# ==================================================
 
 st.set_page_config(
     page_title="Smart Expense Tracker",
@@ -18,47 +18,96 @@ st.set_page_config(
 )
 
 
-# --------------------------------------------------
-# Load ML Model
-# --------------------------------------------------
+# ==================================================
+# FILE PATHS
+# ==================================================
 
-model = joblib.load("models/expense_model.pkl")
-vectorizer = joblib.load("models/tfidf_vectorizer.pkl")
+BASE_DIR = Path(__file__).resolve().parent
+
+MODEL_FILE = BASE_DIR / "models" / "expense_model.pkl"
+VECTORIZER_FILE = BASE_DIR / "models" / "tfidf_vectorizer.pkl"
+
+DATA_DIR = BASE_DIR / "data"
+EXPENSE_FILE = DATA_DIR / "user_expenses.csv"
+
+# Fix for Streamlit Cloud:
+# Create data folder automatically if it does not exist.
+DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 
-# --------------------------------------------------
-# File Configuration
-# --------------------------------------------------
+# ==================================================
+# ML MODEL
+# ==================================================
 
-EXPENSE_FILE = "data/user_expenses.csv"
+@st.cache_resource
+def load_model():
 
-# Create data directory if it does not exist
-os.makedirs("data", exist_ok=True)
+    model = joblib.load(MODEL_FILE)
+    vectorizer = joblib.load(VECTORIZER_FILE)
+
+    return model, vectorizer
 
 
-# --------------------------------------------------
-# Helper Functions
-# --------------------------------------------------
+model, vectorizer = load_model()
+
+
+# ==================================================
+# CONSTANTS
+# ==================================================
+
+CATEGORIES = [
+    "Food",
+    "Travel",
+    "Shopping",
+    "EMI",
+    "Investment"
+]
+
+
+# ==================================================
+# HELPER FUNCTIONS
+# ==================================================
 
 def load_expenses():
 
-    if os.path.exists(EXPENSE_FILE):
+    if EXPENSE_FILE.exists():
 
         df = pd.read_csv(EXPENSE_FILE)
 
         if not df.empty:
-            df["Date"] = pd.to_datetime(df["Date"])
+
+            df["Date"] = pd.to_datetime(
+                df["Date"],
+                errors="coerce"
+            )
+
+            df["Amount"] = pd.to_numeric(
+                df["Amount"],
+                errors="coerce"
+            )
+
+            df = df.dropna(
+                subset=["Date", "Amount"]
+            )
 
         return df
 
     return pd.DataFrame(
-        columns=["Date", "Description", "Amount", "Category"]
+        columns=[
+            "Date",
+            "Description",
+            "Amount",
+            "Category"
+        ]
     )
 
-def save_expense(expense_date, description, amount, category):
 
-    # Ensure data directory exists
-    os.makedirs("data", exist_ok=True)
+def save_expense(
+    expense_date,
+    description,
+    amount,
+    category
+):
 
     new_expense = pd.DataFrame({
         "Date": [expense_date],
@@ -67,7 +116,7 @@ def save_expense(expense_date, description, amount, category):
         "Category": [category]
     })
 
-    if os.path.exists(EXPENSE_FILE):
+    if EXPENSE_FILE.exists():
 
         new_expense.to_csv(
             EXPENSE_FILE,
@@ -83,48 +132,63 @@ def save_expense(expense_date, description, amount, category):
             index=False
         )
 
+
 def predict_category(description):
 
-    text_tfidf = vectorizer.transform([description])
+    text_tfidf = vectorizer.transform(
+        [description]
+    )
 
-    prediction = model.predict(text_tfidf)[0]
+    prediction = model.predict(
+        text_tfidf
+    )[0]
 
-    probabilities = model.predict_proba(text_tfidf)
+    probabilities = model.predict_proba(
+        text_tfidf
+    )
 
     confidence = probabilities.max()
 
     return prediction, confidence
 
 
-def delete_expense(index):
+def delete_expense(row_index):
 
     df = load_expenses()
 
-    df = df.drop(index)
+    if 0 <= row_index < len(df):
 
-    df.to_csv(
-        EXPENSE_FILE,
-        index=False
-    )
+        df = df.drop(
+            index=row_index
+        ).reset_index(drop=True)
+
+        df.to_csv(
+            EXPENSE_FILE,
+            index=False
+        )
 
 
-# --------------------------------------------------
-# App Header
-# --------------------------------------------------
+# ==================================================
+# HEADER
+# ==================================================
 
 st.title("💰 Smart Expense Tracker")
 
-st.write(
-    "Track expenses, automatically categorize them using Machine Learning, "
-    "and analyze your spending."
+st.markdown(
+    "### ML-Powered Personal Finance Dashboard"
+)
+
+st.caption(
+    "Automatically categorize expenses, track spending, "
+    "and understand your financial habits."
 )
 
 st.divider()
 
 
-# --------------------------------------------------
-# Add Expense Section
-# --------------------------------------------------
+# ==================================================
+# ADD EXPENSE
+# ==================================================
 
 st.subheader("➕ Add New Expense")
 
@@ -134,7 +198,7 @@ with col1:
 
     expense_date = st.date_input(
         "Expense Date",
-        value=date.today()
+        value=date.today()  # noqa: DTZ011
     )
 
 with col2:
@@ -161,15 +225,21 @@ if st.button(
 
     if description.strip() == "":
 
-        st.warning("Please enter an expense description.")
+        st.warning(
+            "Please enter an expense description."
+        )
 
     elif amount <= 0:
 
-        st.warning("Please enter a valid amount.")
+        st.warning(
+            "Please enter a valid amount."
+        )
 
     else:
 
-        category, confidence = predict_category(description)
+        category, confidence = predict_category(
+            description
+        )
 
         save_expense(
             expense_date,
@@ -178,18 +248,20 @@ if st.button(
             category
         )
 
-        st.success("Expense saved successfully!")
+        st.success(
+            "Expense saved successfully!"
+        )
 
-        col1, col2 = st.columns(2)
+        result_col1, result_col2 = st.columns(2)
 
-        with col1:
+        with result_col1:
 
             st.metric(
                 "Predicted Category",
                 category
             )
 
-        with col2:
+        with result_col2:
 
             st.metric(
                 "Confidence",
@@ -197,16 +269,16 @@ if st.button(
             )
 
 
-# --------------------------------------------------
-# Load Expense Data
-# --------------------------------------------------
+# ==================================================
+# LOAD DATA
+# ==================================================
 
 expenses = load_expenses()
 
 
-# --------------------------------------------------
-# Sidebar
-# --------------------------------------------------
+# ==================================================
+# SIDEBAR SETTINGS
+# ==================================================
 
 st.sidebar.header("⚙️ Settings")
 
@@ -218,9 +290,9 @@ monthly_budget = st.sidebar.number_input(
 )
 
 
-# --------------------------------------------------
-# Dashboard Section
-# --------------------------------------------------
+# ==================================================
+# DASHBOARD
+# ==================================================
 
 st.divider()
 
@@ -229,19 +301,21 @@ st.subheader("📊 Expense Analytics Dashboard")
 
 if expenses.empty:
 
-    st.info("Add some expenses to see analytics.")
+    st.info(
+        "No expenses added yet. Add your first expense above."
+    )
 
 else:
 
     # --------------------------------------------------
-    # Sidebar Filters
+    # SIDEBAR FILTERS
     # --------------------------------------------------
 
     st.sidebar.header("🔎 Filters")
 
-    categories = ["All"] + sorted(
-        expenses["Category"].dropna().unique().tolist()
-    )
+    # Fixed categories:
+    # All 5 ML categories always appear.
+    categories = ["All"] + CATEGORIES
 
     selected_category = st.sidebar.selectbox(
         "Select Category",
@@ -259,7 +333,7 @@ else:
     )
 
     # --------------------------------------------------
-    # Apply Filters
+    # APPLY FILTERS
     # --------------------------------------------------
 
     filtered_expenses = expenses.copy()
@@ -270,18 +344,24 @@ else:
             filtered_expenses["Category"] == selected_category
         ]
 
-    if len(selected_dates) == 2:
+    if isinstance(selected_dates, tuple) and len(selected_dates) == 2:
 
         start_date, end_date = selected_dates
 
         filtered_expenses = filtered_expenses[
-            (filtered_expenses["Date"].dt.date >= start_date)
+            (
+                filtered_expenses["Date"].dt.date
+                >= start_date
+            )
             &
-            (filtered_expenses["Date"].dt.date <= end_date)
+            (
+                filtered_expenses["Date"].dt.date
+                <= end_date
+            )
         ]
 
     # --------------------------------------------------
-    # Metrics
+    # METRICS
     # --------------------------------------------------
 
     total_spending = filtered_expenses["Amount"].sum()
@@ -307,30 +387,30 @@ else:
 
         top_category = "N/A"
 
-    col1, col2, col3, col4 = st.columns(4)
+    metric_col1, metric_col2, metric_col3, metric_col4 = st.columns(4)
 
-    with col1:
+    with metric_col1:
 
         st.metric(
             "💰 Total Spending",
             f"₹{total_spending:,.2f}"
         )
 
-    with col2:
+    with metric_col2:
 
         st.metric(
             "🧾 Transactions",
             total_transactions
         )
 
-    with col3:
+    with metric_col3:
 
         st.metric(
             "📌 Average Expense",
             f"₹{average_expense:,.2f}"
         )
 
-    with col4:
+    with metric_col4:
 
         st.metric(
             "🏆 Top Category",
@@ -338,55 +418,74 @@ else:
         )
 
     # --------------------------------------------------
-    # Budget Alert
+    # BUDGET MANAGEMENT
     # --------------------------------------------------
 
     st.divider()
 
     st.subheader("💰 Budget Management")
 
-    budget_progress = min(
-        total_spending / monthly_budget,
-        1.0
-    ) if monthly_budget > 0 else 0
+    if monthly_budget > 0:
 
-    st.progress(budget_progress)
+        budget_progress = min(
+            total_spending / monthly_budget,
+            1.0
+        )
 
-    st.write(
-        f"Spent: ₹{total_spending:,.2f} / "
-        f"Budget: ₹{monthly_budget:,.2f}"
-    )
+        st.progress(budget_progress)
 
-    if monthly_budget > 0 and total_spending > monthly_budget:
+        st.write(
+            f"Spent: ₹{total_spending:,.2f} / "
+            f"Budget: ₹{monthly_budget:,.2f}"
+        )
 
-        st.error("⚠️ Budget exceeded!")
+        remaining_budget = monthly_budget - total_spending
 
-    elif monthly_budget > 0 and total_spending >= monthly_budget * 0.8:
+        if remaining_budget >= 0:
 
-        st.warning("⚠️ You have used more than 80% of your budget.")
+            st.success(
+                f"✅ Remaining budget: ₹{remaining_budget:,.2f}"
+            )
+
+        else:
+
+            st.error(
+                f"⚠️ Budget exceeded by "
+                f"₹{abs(remaining_budget):,.2f}"
+            )
 
     else:
 
-        st.success("✅ You are within your budget.")
+        st.info(
+            "Set a monthly budget from the sidebar."
+        )
 
     # --------------------------------------------------
-    # Charts
+    # CHARTS
     # --------------------------------------------------
 
     if not filtered_expenses.empty:
 
         category_summary = (
             filtered_expenses
-            .groupby("Category", as_index=False)["Amount"]
+            .groupby(
+                "Category",
+                as_index=False
+            )["Amount"]
             .sum()
-            .sort_values("Amount", ascending=False)
+            .sort_values(
+                "Amount",
+                ascending=False
+            )
         )
 
-        col1, col2 = st.columns(2)
+        chart_col1, chart_col2 = st.columns(2)
 
-        with col1:
+        with chart_col1:
 
-            st.subheader("📊 Category-wise Spending")
+            st.subheader(
+                "📊 Category-wise Spending"
+            )
 
             fig_bar = px.bar(
                 category_summary,
@@ -401,9 +500,11 @@ else:
                 use_container_width=True
             )
 
-        with col2:
+        with chart_col2:
 
-            st.subheader("🥧 Spending Distribution")
+            st.subheader(
+                "🥧 Spending Distribution"
+            )
 
             fig_pie = px.pie(
                 category_summary,
@@ -418,10 +519,12 @@ else:
             )
 
         # --------------------------------------------------
-        # Monthly Trend
+        # MONTHLY TREND
         # --------------------------------------------------
 
-        st.subheader("📈 Monthly Spending Trend")
+        st.subheader(
+            "📈 Monthly Spending Trend"
+        )
 
         monthly_summary = (
             filtered_expenses
@@ -430,7 +533,10 @@ else:
                 .dt.to_period("M")
                 .astype(str)
             )
-            .groupby("Month", as_index=False)["Amount"]
+            .groupby(
+                "Month",
+                as_index=False
+            )["Amount"]
             .sum()
         )
 
@@ -449,27 +555,40 @@ else:
 
     else:
 
-        st.warning("No expenses found for selected filters.")
+        st.warning(
+            "No expenses found for selected filters."
+        )
 
 
-# --------------------------------------------------
-# Expense History
-# --------------------------------------------------
+# ==================================================
+# EXPENSE HISTORY
+# ==================================================
 
 st.divider()
 
 st.subheader("📋 Expense History")
 
+
 if expenses.empty:
 
-    st.info("No expenses added yet.")
+    st.info(
+        "No expenses added yet."
+    )
 
 else:
 
-    display_expenses = expenses.sort_values(
-        "Date",
-        ascending=False
-    ).reset_index()
+    display_expenses = expenses.copy()
+
+    display_expenses["Date"] = (
+        display_expenses["Date"]
+        .dt.strftime("%Y-%m-%d")
+    )
+
+    display_expenses = (
+        display_expenses
+        .sort_values("Date", ascending=False)
+        .reset_index(drop=True)
+    )
 
     st.dataframe(
         display_expenses,
@@ -478,33 +597,47 @@ else:
     )
 
     # --------------------------------------------------
-    # Delete Expense
+    # DELETE EXPENSE
     # --------------------------------------------------
 
     st.subheader("🗑️ Delete Expense")
 
-    delete_index = st.number_input(
-        "Enter original row index to delete",
-        min_value=0,
-        max_value=len(expenses) - 1,
-        step=1
+    delete_options = [
+        f"{i} | {row['Description']} | "
+        f"₹{row['Amount']:.2f} | {row['Category']}"
+        for i, row in expenses.iterrows()
+    ]
+
+    selected_delete = st.selectbox(
+        "Select expense to delete",
+        delete_options
     )
 
-    if st.button("🗑️ Delete Selected Expense"):
+    selected_index = int(
+        selected_delete.split(" | ")[0]
+    )
 
-        delete_expense(delete_index)
+    if st.button(
+        "🗑️ Delete Selected Expense"
+    ):
 
-        st.success("Expense deleted successfully!")
+        delete_expense(selected_index)
+
+        st.success(
+            "Expense deleted successfully!"
+        )
 
         st.rerun()
 
     # --------------------------------------------------
-    # Export CSV
+    # EXPORT CSV
     # --------------------------------------------------
 
     st.subheader("📥 Export Expense Report")
 
-    csv_data = expenses.to_csv(index=False).encode("utf-8")
+    csv_data = expenses.to_csv(
+        index=False
+    ).encode("utf-8")
 
     st.download_button(
         label="📥 Download CSV Report",
