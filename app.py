@@ -1,12 +1,35 @@
 import os
 from datetime import date
 from pathlib import Path
+from spellchecker import SpellChecker
 
 import joblib
 import pandas as pd
 import plotly.express as px
 import streamlit as st
+import re
 
+def normalize_expense_text(text):
+    """
+    Normalize common spelling mistakes and expense keywords.
+    """
+    text = text.lower().strip()
+
+    replacements = {
+        "flipcart": "flipkart",
+        "shoping": "shopping",
+        "shoppng": "shopping",
+        "shopingg": "shopping",
+        "amazn": "amazon",
+        "restaurent": "restaurant",
+        "resturant": "restaurant",
+        "groceris": "groceries",
+    }
+
+    for wrong, correct in replacements.items():
+        text = text.replace(wrong, correct)
+
+    return text
 # ==================================================
 # PAGE CONFIGURATION
 # ==================================================
