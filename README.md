@@ -9,7 +9,7 @@ The project uses Natural Language Processing (NLP), TF-IDF vectorization, and mu
 ## 🚀 Live Demo
 
 🔗 **Streamlit App:**  
-Add your deployed Streamlit URL here.
+https://smart-expense-ml.streamlit.app
 
 🔗 **GitHub Repository:**  
 https://github.com/aniket-1312/smart-expense-ml
