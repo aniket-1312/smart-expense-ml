@@ -7,3 +7,4 @@ streamlit
 jupyter
 joblib
 plotly
+pyspellchecker
