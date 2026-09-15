@@ -23,15 +23,20 @@ def predict_expense(text):
 
 
 # Test examples
-expenses = [
+test_expenses = [
     "Swiggy dinner",
     "Uber cab payment",
     "Amazon shopping",
     "Monthly loan installment",
-    "SIP investment"
+    "SIP investment",
+    "Flipkart shopping",
+    "Zomato food order",
+    "Petrol for car",
+    "Electricity bill payment",
+    "Movie ticket",
 ]
 
-for expense in expenses:
+for expense in test_expenses:
     category, confidence = predict_expense(expense)
 
     print(f"Expense: {expense}")
