@@ -19,6 +19,35 @@ st.set_page_config(
 
 
 # ==================================================
+# CUSTOM UI
+# ==================================================
+
+st.markdown("""
+<style>
+
+    .main-title {
+        font-size: 42px;
+        font-weight: 700;
+        margin-bottom: 0px;
+    }
+
+    .subtitle {
+        font-size: 18px;
+        color: #9ca3af;
+        margin-bottom: 25px;
+    }
+
+    .section-title {
+        font-size: 25px;
+        font-weight: 600;
+        margin-top: 15px;
+    }
+
+</style>
+""", unsafe_allow_html=True)
+
+
+# ==================================================
 # FILE PATHS
 # ==================================================
 
@@ -30,13 +59,11 @@ VECTORIZER_FILE = BASE_DIR / "models" / "tfidf_vectorizer.pkl"
 DATA_DIR = BASE_DIR / "data"
 EXPENSE_FILE = DATA_DIR / "user_expenses.csv"
 
-# Fix for Streamlit Cloud:
-# Create data folder automatically if it does not exist.
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # ==================================================
-# ML MODEL
+# LOAD MODEL
 # ==================================================
 
 @st.cache_resource
@@ -152,30 +179,58 @@ def predict_category(description):
     return prediction, confidence
 
 
+def update_expense(
+    row_index,
+    expense_date,
+    description,
+    amount,
+    category
+):
+
+    df = load_expenses()
+
+    df.loc[row_index, "Date"] = pd.to_datetime(
+        expense_date
+    )
+
+    df.loc[row_index, "Description"] = description
+
+    df.loc[row_index, "Amount"] = amount
+
+    df.loc[row_index, "Category"] = category
+
+    df.to_csv(
+        EXPENSE_FILE,
+        index=False
+    )
+
+
 def delete_expense(row_index):
 
     df = load_expenses()
 
-    if 0 <= row_index < len(df):
+    df = df.drop(
+        index=row_index
+    ).reset_index(drop=True)
 
-        df = df.drop(
-            index=row_index
-        ).reset_index(drop=True)
-
-        df.to_csv(
-            EXPENSE_FILE,
-            index=False
-        )
+    df.to_csv(
+        EXPENSE_FILE,
+        index=False
+    )
 
 
 # ==================================================
 # HEADER
 # ==================================================
 
-st.title("💰 Smart Expense Tracker")
+st.markdown(
+    '<div class="main-title">💰 Smart Expense Tracker</div>',
+    unsafe_allow_html=True
+)
 
 st.markdown(
-    "### ML-Powered Personal Finance Dashboard"
+    '<div class="subtitle">ML-Powered Personal Finance Dashboard</div>',
+    unsafe_allow_html=True
 )
 
 st.caption(
@@ -190,7 +245,10 @@ st.divider()
 # ADD EXPENSE
 # ==================================================
 
-st.subheader("➕ Add New Expense")
+st.markdown(
+    '<div class="section-title">➕ Add New Expense</div>',
+    unsafe_allow_html=True
+)
 
 col1, col2, col3 = st.columns(3)
 
@@ -198,7 +256,7 @@ with col1:
 
     expense_date = st.date_input(
         "Expense Date",
-        value=date.today()  # noqa: DTZ011
+        value=date.today()
     )
 
 with col2:
@@ -277,7 +335,7 @@ expenses = load_expenses()
 
 
 # ==================================================
-# SIDEBAR SETTINGS
+# SIDEBAR
 # ==================================================
 
 st.sidebar.header("⚙️ Settings")
@@ -296,7 +354,10 @@ monthly_budget = st.sidebar.number_input(
 
 st.divider()
 
-st.subheader("📊 Expense Analytics Dashboard")
+st.markdown(
+    '<div class="section-title">📊 Expense Analytics Dashboard</div>',
+    unsafe_allow_html=True
+)
 
 
 if expenses.empty:
@@ -308,13 +369,11 @@ if expenses.empty:
 else:
 
     # --------------------------------------------------
-    # SIDEBAR FILTERS
+    # FILTERS
     # --------------------------------------------------
 
     st.sidebar.header("🔎 Filters")
 
-    # Fixed categories:
-    # All 5 ML categories always appear.
     categories = ["All"] + CATEGORIES
 
     selected_category = st.sidebar.selectbox(
@@ -331,10 +390,6 @@ else:
         min_value=min_date,
         max_value=max_date
     )
-
-    # --------------------------------------------------
-    # APPLY FILTERS
-    # --------------------------------------------------
 
     filtered_expenses = expenses.copy()
 
@@ -418,7 +473,7 @@ else:
         )
 
     # --------------------------------------------------
-    # BUDGET MANAGEMENT
+    # BUDGET
     # --------------------------------------------------
 
     st.divider()
@@ -434,12 +489,12 @@ else:
 
         st.progress(budget_progress)
 
+        remaining_budget = monthly_budget - total_spending
+
         st.write(
             f"Spent: ₹{total_spending:,.2f} / "
             f"Budget: ₹{monthly_budget:,.2f}"
         )
-
-        remaining_budget = monthly_budget - total_spending
 
         if remaining_budget >= 0:
 
@@ -453,12 +508,6 @@ else:
                 f"⚠️ Budget exceeded by "
                 f"₹{abs(remaining_budget):,.2f}"
             )
-
-    else:
-
-        st.info(
-            "Set a monthly budget from the sidebar."
-        )
 
     # --------------------------------------------------
     # CHARTS
@@ -566,7 +615,10 @@ else:
 
 st.divider()
 
-st.subheader("📋 Expense History")
+st.markdown(
+    '<div class="section-title">📋 Expense History</div>',
+    unsafe_allow_html=True
+)
 
 
 if expenses.empty:
@@ -584,6 +636,11 @@ else:
         .dt.strftime("%Y-%m-%d")
     )
 
+    display_expenses["Amount"] = (
+        display_expenses["Amount"]
+        .map(lambda x: f"₹{x:,.2f}")
+    )
+
     display_expenses = (
         display_expenses
         .sort_values("Date", ascending=False)
@@ -597,29 +654,47 @@ else:
     )
 
     # --------------------------------------------------
-    # DELETE EXPENSE
+    # EDIT / DELETE
     # --------------------------------------------------
 
-    st.subheader("🗑️ Delete Expense")
+    st.subheader("✏️ Manage Expense")
 
-    delete_options = [
+    expense_options = [
         f"{i} | {row['Description']} | "
-        f"₹{row['Amount']:.2f} | {row['Category']}"
+        f"₹{row['Amount']:,.2f} | {row['Category']}"
         for i, row in expenses.iterrows()
     ]
 
-    selected_delete = st.selectbox(
-        "Select expense to delete",
-        delete_options
+    selected_expense = st.selectbox(
+        "Select an expense",
+        expense_options
     )
 
     selected_index = int(
-        selected_delete.split(" | ")[0]
+        selected_expense.split(" | ")[0]
     )
 
-    if st.button(
-        "🗑️ Delete Selected Expense"
-    ):
+    action_col1, action_col2 = st.columns(2)
+
+    with action_col1:
+
+        edit_button = st.button(
+            "✏️ Edit Selected Expense",
+            use_container_width=True
+        )
+
+    with action_col2:
+
+        delete_button = st.button(
+            "🗑️ Delete Selected Expense",
+            use_container_width=True
+        )
+
+    # --------------------------------------------------
+    # DELETE ACTION
+    # --------------------------------------------------
+
+    if delete_button:
 
         delete_expense(selected_index)
 
@@ -628,6 +703,84 @@ else:
         )
 
         st.rerun()
+
+    # --------------------------------------------------
+    # EDIT ACTION
+    # --------------------------------------------------
+
+    if edit_button:
+
+        selected_row = expenses.loc[selected_index]
+
+        st.subheader("✏️ Edit Expense Details")
+
+        edit_col1, edit_col2, edit_col3 = st.columns(3)
+
+        with edit_col1:
+
+            edit_date = st.date_input(
+                "Edit Date",
+                value=selected_row["Date"].date()
+            )
+
+        with edit_col2:
+
+            edit_description = st.text_input(
+                "Edit Description",
+                value=selected_row["Description"]
+            )
+
+        with edit_col3:
+
+            edit_amount = st.number_input(
+                "Edit Amount (₹)",
+                min_value=0.0,
+                value=float(selected_row["Amount"]),
+                step=10.0
+            )
+
+        edit_category = st.selectbox(
+            "Edit Category",
+            CATEGORIES,
+            index=(
+                CATEGORIES.index(selected_row["Category"])
+                if selected_row["Category"] in CATEGORIES
+                else 0
+            )
+        )
+
+        if st.button(
+            "💾 Save Changes",
+            use_container_width=True
+        ):
+
+            if edit_description.strip() == "":
+
+                st.warning(
+                    "Description cannot be empty."
+                )
+
+            elif edit_amount <= 0:
+
+                st.warning(
+                    "Amount must be greater than zero."
+                )
+
+            else:
+
+                update_expense(
+                    selected_index,
+                    edit_date,
+                    edit_description,
+                    edit_amount,
+                    edit_category
+                )
+
+                st.success(
+                    "Expense updated successfully!"
+                )
+
+                st.rerun()
 
     # --------------------------------------------------
     # EXPORT CSV
