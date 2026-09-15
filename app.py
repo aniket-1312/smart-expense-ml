@@ -32,6 +32,9 @@ vectorizer = joblib.load("models/tfidf_vectorizer.pkl")
 
 EXPENSE_FILE = "data/user_expenses.csv"
 
+# Create data directory if it does not exist
+os.makedirs("data", exist_ok=True)
+
 
 # --------------------------------------------------
 # Helper Functions
@@ -52,8 +55,10 @@ def load_expenses():
         columns=["Date", "Description", "Amount", "Category"]
     )
 
-
 def save_expense(expense_date, description, amount, category):
+
+    # Ensure data directory exists
+    os.makedirs("data", exist_ok=True)
 
     new_expense = pd.DataFrame({
         "Date": [expense_date],
@@ -77,7 +82,6 @@ def save_expense(expense_date, description, amount, category):
             EXPENSE_FILE,
             index=False
         )
-
 
 def predict_category(description):
 
